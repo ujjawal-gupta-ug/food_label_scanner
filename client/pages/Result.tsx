@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import jsPDF from "jspdf";
 import {
   ArrowLeft,
   Activity,
@@ -205,7 +206,7 @@ function ResultHeader({
               <Moon className="h-[18px] w-[18px]" />
             )}
           </button>
-          <button className="login-button hidden sm:flex">Log In</button>
+          {/* <button className="login-button hidden sm:flex">Log In</button> */}
         </div>
       </div>
     </header>
@@ -665,21 +666,252 @@ export default function Result() {
               <button
                 className="download-button"
                 onClick={() => {
-                  const file = new Blob(
-                    [JSON.stringify(dynamicAnalysis, null, 2)],
-                    {
-                      type: "application/json",
-                    },
+                  const doc = new jsPDF();
+
+                  let y = 20;
+
+                  const addText = (
+                    text: unknown,
+                    x: number = 20,
+                    fontSize: number = 11,
+                  ) => {
+                    if (y > 275) {
+                      doc.addPage();
+                      y = 20;
+                    }
+
+                    doc.setFontSize(fontSize);
+                    doc.setFont("helvetica", "normal");
+
+                    const safeText = String(text ?? "");
+                    const lines = doc.splitTextToSize(safeText, 170);
+
+                    lines.forEach((line: string) => {
+                      if (y > 275) {
+                        doc.addPage();
+                        y = 20;
+                      }
+
+                      doc.text(line, x, y);
+                      y += 6;
+                    });
+                  };
+
+                  const addHeading = (text: string) => {
+                    if (y > 250) {
+                      doc.addPage();
+                      y = 20;
+                    }
+
+                    doc.setFontSize(16);
+                    doc.setFont("helvetica", "bold");
+                    doc.text(String(text), 20, y);
+
+                    y += 9;
+                  };
+
+                  // =========================
+                  // HEADER
+                  // =========================
+
+                  doc.setFontSize(22);
+                  doc.setFont("helvetica", "bold");
+                  doc.text("NutriScan", 20, y);
+
+                  y += 8;
+
+                  doc.setFontSize(11);
+                  doc.setFont("helvetica", "normal");
+                  doc.text("Food Health Analysis Report", 20, y);
+
+                  y += 15;
+
+                  // =========================
+                  // PRODUCT DETAILS
+                  // =========================
+
+                  addHeading("Product Details");
+
+                  addText(
+                    `Product: ${dynamicAnalysis.product?.name ?? "Unknown"}`,
                   );
-                  const url = URL.createObjectURL(file);
-                  const link = document.createElement("a");
-                  link.href = url;
-                  link.download = "nutriscan-report.json";
-                  link.click();
-                  URL.revokeObjectURL(url);
+                  addText(
+                    `Brand: ${dynamicAnalysis.product?.brand ?? "Unknown"}`,
+                  );
+                  addText(
+                    `Category: ${dynamicAnalysis.product?.category ?? "Unknown"}`,
+                  );
+                  addText(`Health Score: ${dynamicAnalysis.score ?? 0}/100`);
+                  addText(`Rating: ${dynamicAnalysis.rating ?? "Unknown"}`);
+
+                  y += 6;
+
+                  // =========================
+                  // OVERALL ASSESSMENT
+                  // =========================
+
+                  addHeading("Overall Assessment");
+
+                  addText(dynamicAnalysis.explanation);
+
+                  y += 6;
+
+                  // =========================
+                  // HEALTH FACTORS
+                  // =========================
+
+                  addHeading("Health Factors");
+
+                  (dynamicAnalysis.factors ?? []).forEach((factor) => {
+                    addText(
+                      `${factor?.label ?? "Factor"}: ${factor?.value ?? "Unknown"}`,
+                    );
+                  });
+
+                  y += 6;
+
+                  // =========================
+                  // WHAT'S GOOD
+                  // =========================
+
+                  addHeading("What's Good");
+
+                  (dynamicAnalysis.good ?? []).forEach((item) => {
+                    addText(`• ${item}`);
+                  });
+
+                  y += 6;
+
+                  // =========================
+                  // WATCH OUT
+                  // =========================
+
+                  addHeading("Watch Out");
+
+                  (dynamicAnalysis.watchOut ?? []).forEach((item) => {
+                    addText(`• ${item}`);
+                  });
+
+                  y += 6;
+
+                  // =========================
+                  // NUTRITION
+                  // =========================
+
+                  addHeading("Nutrition Snapshot (per 100g)");
+
+                  (dynamicAnalysis.nutrition ?? []).forEach((item) => {
+                    addText(
+                      `${item?.label ?? "Nutrient"}: ${item?.value ?? "--"}`,
+                    );
+                  });
+
+                  y += 6;
+
+                  // =========================
+                  // INGREDIENTS
+                  // =========================
+
+                  addHeading("Ingredients");
+
+                  (dynamicAnalysis.ingredients ?? []).forEach((ingredient) => {
+                    addText(
+                      `• ${ingredient?.name ?? "Unknown"} — ${
+                        ingredient?.risk ?? "Unknown"
+                      }`,
+                    );
+                  });
+
+                  y += 6;
+
+                  // =========================
+                  // HEALTH IMPACT
+                  // =========================
+
+                  addHeading("Health Impact");
+
+                  (dynamicAnalysis.healthImpacts ?? []).forEach((impact) => {
+                    const impactLabel =
+                      impact?.impact === "high"
+                        ? "High Impact"
+                        : impact?.impact === "moderate"
+                          ? "Moderate Impact"
+                          : "Low Impact";
+
+                    addText(`${impact?.title ?? "Health"}: ${impactLabel}`);
+
+                    addText(impact?.description ?? "", 25);
+
+                    if (impact?.reasons?.length) {
+                      addText(`Why: ${impact.reasons.join(", ")}`, 25);
+                    }
+
+                    y += 3;
+                  });
+
+                  // =========================
+                  // RECOMMENDATION
+                  // =========================
+
+                  addHeading("Recommendation");
+
+                  doc.setFontSize(12);
+                  doc.setFont("helvetica", "bold");
+
+                  doc.text(
+                    String(dynamicAnalysis.recommendation?.title ?? ""),
+                    20,
+                    y,
+                  );
+
+                  y += 7;
+
+                  addText(dynamicAnalysis.recommendation?.detail ?? "");
+
+                  y += 6;
+
+                  // =========================
+                  // HEALTHY TIP
+                  // =========================
+
+                  addHeading("Healthy Tip");
+
+                  addText(dynamicAnalysis.healthTip?.detail ?? "");
+
+                  // =========================
+                  // FOOTER
+                  // =========================
+
+                  const pageCount = doc.getNumberOfPages();
+
+                  for (let i = 1; i <= pageCount; i++) {
+                    doc.setPage(i);
+
+                    doc.setFontSize(9);
+                    doc.setFont("helvetica", "normal");
+
+                    doc.text(
+                      `NutriScan - Food Health Analysis - Page ${i} of ${pageCount}`,
+                      20,
+                      290,
+                    );
+                  }
+
+                  // =========================
+                  // DOWNLOAD
+                  // =========================
+
+                  const productName = dynamicAnalysis.product?.name || "food";
+
+                  const safeFileName = String(productName)
+                    .replace(/[^a-z0-9]/gi, "-")
+                    .toLowerCase();
+
+                  doc.save(`nutriscan-${safeFileName}-report.pdf`);
                 }}
               >
-                <Download className="h-4 w-4" /> Download Report
+                <Download className="h-4 w-4" />
+                Download Report
               </button>
             </div>
           </div>

@@ -29,24 +29,24 @@ const healthImpactSchema = new mongoose.Schema(
 
 const scanSchema = new mongoose.Schema(
   {
-    // Source image
     imageName: { type: String, required: true },
     imagePath: { type: String, required: true },
     imageType: { type: String, required: true },
     imageSize: { type: Number, required: true },
     imageUrl: { type: String, required: true },
 
-    // Raw OCR text, kept for debugging / re-analysis
+    // dedup keys — this is what kills duplicate entries
+    imageHash: { type: String, index: true }, // exact same photo re-uploaded
+    productKey: { type: String, index: true }, // normalized "brand|name", same product via a different photo
+
     extractedText: { type: String, default: "" },
 
-    // Product identity
     product: {
       name: { type: String, default: "Scanned Product" },
       brand: { type: String, default: "NutriScan" },
       category: { type: String, default: "Food Product" },
     },
 
-    // Top-level analysis result
     score: { type: Number, default: 0 },
     rating: { type: String, default: "Analysis Unavailable" },
     tone: {
@@ -63,24 +63,25 @@ const scanSchema = new mongoose.Schema(
     nutrition: { type: [nutritionSchema], default: [] },
     healthImpacts: { type: [healthImpactSchema], default: [] },
 
-    healthTip: {
-      detail: { type: String, default: "" },
-    },
+    healthTip: { detail: { type: String, default: "" } },
     recommendation: {
       title: { type: String, default: "" },
       detail: { type: String, default: "" },
     },
 
-    // Optional: wire up once auth exists
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    // left undefined (not null) when absent, so the sparse index below works correctly
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true },
 );
 
-// History list is sorted by recency — index it
 scanSchema.index({ createdAt: -1 });
 
-// Derive the "tone" bucket from score if it wasn't set explicitly
+// One entry per user per product — re-scanning the same item updates this
+// instead of inserting a new document. Sparse so anonymous scans (no userId)
+// don't get forced into this constraint.
+scanSchema.index({ userId: 1, productKey: 1 }, { unique: true, sparse: true });
+
 scanSchema.pre("save", function () {
   if (!this.isModified("score")) return;
   if (this.score >= 60) this.tone = "good";
